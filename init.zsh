@@ -51,10 +51,20 @@ if [[ -n "$MSYSTEM" ]]; then
     fi
     fpath+=(${compfile:h})
 
-    # fix Windows-style paths after every prompt
+    # The generated chpwd hook can leave PATH in Windows form until the next
+    # precmd. Normalise it immediately so later chpwd hooks see a Unix path.
     __mise_fix_path() {
       export PATH="$(/usr/bin/cygpath -u -p "$PATH")"
     }
+    if (( $+functions[_mise_hook_chpwd] )); then
+      functions[_mise_hook_chpwd_raw]=${functions[_mise_hook_chpwd]}
+      _mise_hook_chpwd() {
+        _mise_hook_chpwd_raw "$@"
+        __mise_fix_path
+      }
+    fi
+
+    # fix Windows-style paths after every prompt
     autoload -Uz add-zsh-hook
     add-zsh-hook precmd __mise_fix_path
     __mise_fix_path
