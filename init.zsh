@@ -17,12 +17,22 @@ if [[ -n "$MSYSTEM" ]]; then
 
     local cachedir=$1
     local command=$_MISE_EXE_UNIX
+    local -i full_activation=0
+    local -a activate_args=(activate zsh)
+    local activation_mode=shims
+    if [[ -o interactive ]]; then
+      full_activation=1
+      activation_mode=activate
+    else
+      activate_args+=(--shims)
+    fi
 
-    # generating activation file (with path fixups for MSYS2)
-    local activatefile=$cachedir/mise-activate.zsh
+    # Keep distinct caches because .zshenv is sourced by both interactive and
+    # non-interactive shells.
+    local activatefile=$cachedir/mise-${activation_mode}.zsh
     if [[ ! -e $activatefile || $activatefile -ot $command ]]; then
       local mise_activate_script
-      mise_activate_script="$($command activate zsh)"
+      mise_activate_script="$($command "${activate_args[@]}")"
 
       local mise_path_line
       mise_path_line="$(printf '%s\n' "$mise_activate_script" | sed -n 's/^export PATH="\([^"]*\)".*$/\1/p')"
@@ -40,6 +50,7 @@ if [[ -n "$MSYSTEM" ]]; then
     fi
 
     source $activatefile
+    (( full_activation )) || return
     source <($command hook-env -s zsh)
 
     # generating completions
@@ -73,15 +84,26 @@ if [[ -n "$MSYSTEM" ]]; then
 elif (( ${+commands[mise]} )); then
   () {
     local command=${commands[mise]}
+    local -i full_activation=0
+    local -a activate_args=(activate zsh)
+    local activation_mode=shims
+    if [[ -o interactive ]]; then
+      full_activation=1
+      activation_mode=activate
+    else
+      activate_args+=(--shims)
+    fi
 
-    # generating activation file
-    local activatefile=$1/mise-activate.zsh
+    # Keep distinct caches because .zshenv is sourced by both interactive and
+    # non-interactive shells.
+    local activatefile=$1/mise-${activation_mode}.zsh
     if [[ ! -e $activatefile || $activatefile -ot $command ]]; then
-      $command activate zsh >| $activatefile
+      $command "${activate_args[@]}" >| $activatefile
       zcompile -UR $activatefile
     fi
 
     source $activatefile
+    (( full_activation )) || return
     source <($command hook-env -s zsh)
 
     # generating completions

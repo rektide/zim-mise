@@ -4,3 +4,8 @@ https://github.com/zimfw/zimfw[zim module] for https://github.com/jdx/mise[mise]
 
 TIP: Add this module as early as possible to the `.zimrc` file.
   This allows other plugins to detect apps installed by `mise`.
+
+The module is also safe in a Zim instance loaded from `.zshenv`. Interactive
+shells receive full `mise activate zsh` behavior, while non-interactive shells
+receive only `mise activate zsh --shims`. Each mode has a separate activation
+cache, and mise is initialized only once per shell.
