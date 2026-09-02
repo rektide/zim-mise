@@ -84,35 +84,75 @@ if [[ -n "$MSYSTEM" ]]; then
 elif (( ${+commands[mise]} )); then
   () {
     local command=${commands[mise]}
+
+    # Module options, read via zstyle. Set them BEFORE this module loads
+    # (in .zshenv when loading from the early Zim channel):
+    #
+    #   zstyle ':zim:plugins:mise' mode auto|shims|activate
+    #       auto (default): full activate interactively, shims otherwise.
+    #       shims: always `mise activate --shims`.
+    #       activate: always full activation, even in non-interactive shells
+    #                 (exports [env] vars to scripts; costs a mise run per shell).
+    #   zstyle ':zim:plugins:mise' activate-args <arg>...
+    #       Extra arguments appended to `mise activate`. Disables the
+    #       activation cache (output depends on the arguments).
+    #   zstyle ':zim:plugins:mise' completions yes|no   (default yes)
+    #   zstyle ':zim:plugins:mise' quiet yes|no         (default no)
+    local mode
+    zstyle -s ':zim:plugins:mise' mode mode || mode=auto
+    local -a extra_args
+    zstyle -a ':zim:plugins:mise' activate-args extra_args
+    local completions
+    zstyle -s ':zim:plugins:mise' completions completions || completions=yes
+    [[ $completions == (1|yes|true|on) ]] || completions=no
+    local quiet
+    zstyle -s ':zim:plugins:mise' quiet quiet || quiet=no
+    [[ $quiet == (1|yes|true|on) ]] && quiet=yes || quiet=no
+    if [[ $mode != auto && $mode != shims && $mode != activate ]]; then
+      print -u2 -PR "* zim-mise: unknown mode '${mode}', using auto."
+      mode=auto
+    fi
+
     local -i full_activation=0
-    local -a activate_args=(activate zsh)
+    local -a activate_args=(activate zsh "${extra_args[@]}")
     local activation_mode=shims
-    if [[ -o interactive ]]; then
+    if [[ $mode == activate ]]; then
+      full_activation=1
+      activation_mode=activate
+    elif [[ $mode == auto && -o interactive ]]; then
       full_activation=1
       activation_mode=activate
     else
       activate_args+=(--shims)
     fi
 
-    # Keep distinct caches because .zshenv is sourced by both interactive and
-    # non-interactive shells.
-    local activatefile=$1/mise-${activation_mode}.zsh
-    if [[ ! -e $activatefile || $activatefile -ot $command ]]; then
-      $command "${activate_args[@]}" >| $activatefile
-      zcompile -UR $activatefile
+    if (( ${#extra_args} )); then
+      # Argument-dependent output is not cacheable; evaluate directly.
+      source <($command "${activate_args[@]}")
+    else
+      # Keep distinct caches because .zshenv is sourced by both interactive and
+      # non-interactive shells.
+      local activatefile=$1/mise-${activation_mode}.zsh
+      if [[ ! -e $activatefile || $activatefile -ot $command ]]; then
+        $command "${activate_args[@]}" >| $activatefile
+        zcompile -UR $activatefile
+      fi
+      source $activatefile
     fi
 
-    source $activatefile
     (( full_activation )) || return
-    source <($command hook-env -s zsh)
+    # `--no-hook-env` in activate-args also opts out of this initial hook-env.
+    (( ${extra_args[(I)--no-hook-env]} )) || source <($command hook-env -s zsh)
 
-    # generating completions
-    local compfile=$1/functions/_mise
-    [[ -d ${compfile:h} ]] || mkdir -p ${compfile:h}
-    if [[ ! -e $compfile || $compfile -ot $command ]]; then
-      $command complete --shell zsh >| $compfile
-      print -u2 -PR "* Detected a new version of 'mise'. Regenerated completions."
+    if [[ $completions == yes ]]; then
+      # generating completions
+      local compfile=$1/functions/_mise
+      [[ -d ${compfile:h} ]] || mkdir -p ${compfile:h}
+      if [[ ! -e $compfile || $compfile -ot $command ]]; then
+        $command complete --shell zsh >| $compfile
+        [[ $quiet == yes ]] || print -u2 -PR "* Detected a new version of 'mise'. Regenerated completions."
+      fi
+      fpath+=(${compfile:h})
     fi
-    fpath+=(${compfile:h})
   } ${0:h}
 fi

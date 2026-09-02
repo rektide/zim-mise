@@ -9,3 +9,31 @@ The module is also safe in a Zim instance loaded from `.zshenv`. Interactive
 shells receive full `mise activate zsh` behavior, while non-interactive shells
 receive only `mise activate zsh --shims`. Each mode has a separate activation
 cache, and mise is initialized only once per shell.
+
+== Options
+
+Configure with `zstyle` before the module loads (in `.zshenv` for the
+early-channel setup):
+
+[source,zsh]
+----
+zstyle ':zim:plugins:mise' mode auto                # auto (default) | shims | activate
+zstyle ':zim:plugins:mise' activate-args --status   # extra `mise activate` args; disables caching
+zstyle ':zim:plugins:mise' completions yes          # default yes
+zstyle ':zim:plugins:mise' quiet no                 # default no; suppresses notices
+----
+
+`mode`:
+
+* `auto` (default):: full activation interactively, shims in non-interactive shells.
+* `shims`:: always shims -- even interactive shells skip the hooks and wrapper.
+* `activate`:: always full activation -- non-interactive shells also get `[env]`
+  vars exported at shell start, at the cost of a `mise` run per shell.
+
+`activate-args` are appended to the `mise activate` call in either mode.
+Because the output then depends on the arguments, the activation cache is
+bypassed while they are set. Passing `--no-hook-env` here also skips the
+module's own initial `hook-env` call.
+
+NOTE: Options are read when the module loads and currently apply to the
+non-MSYS path only.
